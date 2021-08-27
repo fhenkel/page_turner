@@ -9,13 +9,15 @@ from pyqtgraph.Qt import QtCore
 import pyqtgraph.ptime as ptime
 import pyqtgraph as pg
 import numpy as np
+import math
 from PyQt5.QtWidgets import (
     QFileDialog,
     QWidget,
     QApplication,
     QMainWindow,
     QVBoxLayout,
-    QStackedLayout,
+    QHBoxLayout,
+    QGridLayout,
 )
 
 from prediction import Score_Audio_Prediction
@@ -29,11 +31,17 @@ class MainWindow(QMainWindow):
         self.score_path = None
         self.live_audio = None
         self.live_score = None
+        self.last_page = 0
 
         self.setWindowTitle("Automatic Page Turner")
-        self.resize(1000, 900)
+        self.resize(1500, 900)
 
+        horiz_layout = QHBoxLayout()
         vert_layout = QVBoxLayout()
+        
+        self.page_grid = QGridLayout()
+        self.page_graphics = []
+        self.image_items = []
 
         self.Scores_graphics = pg.GraphicsView()
         self.Scores_graphics.setBackground(None)
@@ -47,7 +55,6 @@ class MainWindow(QMainWindow):
         self.Scores_graphics.setCentralItem(scores_view)
         scores_view.setAspectLocked(True)
 
-        # data_score = np.ones((1181, 835, 3)) * 128
         self.score_img = pg.ImageItem(border="l", levels=(0, 255), axisOrder='row-major')
         scores_view.addItem(self.score_img)
 
@@ -73,8 +80,10 @@ class MainWindow(QMainWindow):
         self.updateTime = ptime.time()
         self.fps = 0
 
+        horiz_layout.addLayout(vert_layout)
+        horiz_layout.addLayout(self.page_grid)
         container = QWidget()
-        container.setLayout(vert_layout)
+        container.setLayout(horiz_layout)
 
         # Set the central widget of the Window.
         self.setCentralWidget(container)
@@ -99,18 +108,50 @@ class MainWindow(QMainWindow):
         elif extension == "npz":
             self.score_path = curr_path
 
+    def load_pages(self):
+        for i, page in enumerate(self.image_predictor.page_plots):
+            self.page_graphics.append(pg.GraphicsView())
+            self.page_graphics[i].setBackground(None)
+            self.page_graphics[i].setMinimumSize(250, 50)
+            self.page_graphics[i].setMaximumWidth(50)
+            self.page_graphics[i].show()
+
+            scores_view = pg.ViewBox(defaultPadding=0.001)
+            scores_view.invertY()
+            self.page_graphics[i].setCentralItem(scores_view)
+            scores_view.setAspectLocked(True)
+
+            self.image_items.append(pg.ImageItem(image=page, border={"color": "l", "width": 2}, levels=(0, 255), axisOrder='row-major'))
+            if i == 0:
+                self.page_graphics[i].setMinimumSize(300, 50)
+                self.image_items[i].setBorder({"color": "r", "width": 2})
+            scores_view.addItem(self.image_items[i])
+
+            self.page_grid.addWidget(self.page_graphics[i], math.floor(i/2), i % 2)
+
+
+
+
     def create_prediction_object(self):
         if self.score_path is not None and self.audio_path is not None:
             print(self.score_path)
             print(self.audio_path)
             self.image_predictor = Score_Audio_Prediction(self.param_path, audio_path=self.audio_path,
                                                           score_path=self.score_path, gt_only=True, page=None)
+            self.load_pages()
             self.updateData()
         else:
             pass
 
     def updateData(self):
         score_image, audio_image = self.image_predictor.get_next_images()
+        if self.last_page != self.image_predictor.actual_page:
+            self.page_graphics[self.last_page].setMinimumSize(250, 50)
+            self.image_items[self.last_page].setBorder({"color": "l", "width": 2})
+            self.last_page = self.image_predictor.actual_page
+            self.image_items[self.last_page].setBorder({"color": "r", "width": 2})
+            self.page_graphics[self.last_page].setMinimumSize(300, 50)
+
         self.score_img.setImage(score_image)
         self.audio_img.setImage(audio_image)
         # creating a qtimer
