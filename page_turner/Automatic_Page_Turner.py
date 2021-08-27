@@ -23,7 +23,7 @@ from prediction import Score_Audio_Prediction
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.default_path = "/home/stephanie/Documents/Studium/Automatic_Page_Turning/cyolo_score_following/data/msmd"
+        self.default_path = "/home/stephanie/Documents/Studium/Automatic_Page_Turning/cyolo_score_following/data/msmd "
         self.param_path = os.path.join('..', 'models', 'test_model', 'best_model.pt')
         self.audio_path = None
         self.score_path = None
