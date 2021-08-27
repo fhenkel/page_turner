@@ -23,14 +23,17 @@ from prediction import Score_Audio_Prediction
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.default_path = "/home/stephanie/Documents/Studium/Automatic_Page_Turning/cyolo_score_following/data/msmd"
+        self.param_path = os.path.join('..', 'models', 'test_model', 'best_model.pt')
+        self.audio_path = None
+        self.score_path = None
+        self.live_audio = None
+        self.live_score = None
+
         self.setWindowTitle("Automatic Page Turner")
         self.resize(1000, 900)
 
         vert_layout = QVBoxLayout()
-
-        # with open('test_array.npy', 'rb') as f:
-        #     data = np.load(f)
-        # data = np.array((data*255), dtype=np.uint8)
 
         self.Scores_graphics = pg.GraphicsView()
         self.Scores_graphics.setBackground(None)
@@ -78,20 +81,33 @@ class MainWindow(QMainWindow):
 
         self._create_menu_bar()
         self.path = None
-        self.choose_piece.triggered.connect(self.choose_piece_dir)
+        self.choose_score.triggered.connect(lambda: self.choose_piece_dir("npz"))
+        self.choose_audio.triggered.connect(lambda: self.choose_piece_dir("wav"))
+        self.choose_score.triggered.connect(self.create_prediction_object)
+        self.choose_audio.triggered.connect(self.create_prediction_object)
+        self.live_score.triggered.connect(self.create_prediction_object)
+        self.live_audio.triggered.connect(self.create_prediction_object)
 
-    def choose_piece_dir(self):
+    def choose_piece_dir(self, extension):
         print(os.getcwd())
-        default_path = "/home/stephanie/Documents/Studium/Automatic_Page_Turning/cyolo_score_following/data/msmd"
-        curr_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, 'Select one piece', default_path,
-                                                             "Wav files (*.wav)",
+        curr_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, 'Select one piece', self.default_path,
+                                                             f"(*.{extension})",
                                                              options=QFileDialog.DontUseNativeDialog)
         print(self.path)
-        param_path = os.path.join('..', 'models', 'test_model', 'best_model.pt')
-        test_dir, test_piece = os.path.split(curr_path)
-        test_piece = os.path.splitext(test_piece)[0]
-        self.image_predictor = Score_Audio_Prediction(param_path, test_dir, test_piece, scale_width=416, gt_only=True, page=None)
-        self.updateData()
+        if extension == "wav":
+            self.audio_path = curr_path
+        elif extension == "npz":
+            self.score_path = curr_path
+
+    def create_prediction_object(self):
+        if self.score_path is not None and self.audio_path is not None:
+            print(self.score_path)
+            print(self.audio_path)
+            self.image_predictor = Score_Audio_Prediction(self.param_path, audio_path=self.audio_path,
+                                                          score_path=self.score_path, gt_only=True, page=None)
+            self.updateData()
+        else:
+            pass
 
     def updateData(self):
         score_image, audio_image = self.image_predictor.get_next_images()
@@ -112,8 +128,14 @@ class MainWindow(QMainWindow):
         menu_bar = self.menuBar()
         self.menu_piece = QMenu("&Piece", self)
         menu_bar.addMenu(self.menu_piece)
-        self.choose_piece = QAction("&Choose Piece", self)
-        self.menu_piece.addAction(self.choose_piece)
+        self.choose_score = QAction("&Choose Score", self)
+        self.choose_audio = QAction("&Choose Audio", self)
+        self.live_score = QAction("&Live Score", self)
+        self.live_audio = QAction("&Live Audio", self)
+        self.menu_piece.addAction(self.choose_score)
+        self.menu_piece.addAction(self.choose_audio)
+        self.menu_piece.addAction(self.live_score)
+        self.menu_piece.addAction(self.live_audio)
 
         self.menu_view = QMenu("&View", self)
         menu_bar.addMenu(self.menu_view)

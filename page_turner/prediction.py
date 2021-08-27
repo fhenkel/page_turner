@@ -6,15 +6,24 @@ from cyolo_score_following.models.yolo import load_pretrained_model
 from cyolo_score_following.utils.data_utils import load_piece_for_testing, SAMPLE_RATE, FPS, FRAME_SIZE, HOP_SIZE
 from cyolo_score_following.utils.general import xywh2xyxy
 from cyolo_score_following.utils.video_utils import plot_box, plot_line
+from cyolo_score_following.utils.general import load_wav
+from collections import Counter
+from scipy import interpolate
 import matplotlib.cm as cm
+import os
 
 
 class Score_Audio_Prediction:
-    def __init__(self, param_path, test_dir, piece_name, scale_width=416, gt_only=False, page=None):
+    def __init__(self, param_path, live_audio=None, audio_path=None, live_score=None, score_path=None,
+                 gt_only=False, page=None):
         self.gt_only = gt_only
-        self.org_scores, score, self.signal_np, self.systems, self.interpol_fnc, self.pad, self.scale_factor = load_piece_for_testing(test_dir,
-                                                                                                        piece_name,
-                                                                                                        scale_width)
+        self.live_audio = live_audio
+        self.audio_path = audio_path
+        self.live_score = live_score
+        self.score_path = score_path
+        self.org_scores, self.score, self.signal_np, self.systems, self.interpol_fnc, self.pad, self.scale_factor = [None] * 7
+        self.load_essentials()
+
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.network, criterion = load_pretrained_model(param_path)
@@ -26,7 +35,7 @@ class Score_Audio_Prediction:
         self.network.eval()
 
         self.signal = torch.from_numpy(self.signal_np).to(device)
-        self.score_tensor = torch.from_numpy(score).unsqueeze(1).to(device)
+        self.score_tensor = torch.from_numpy(self.score).unsqueeze(1).to(device)
 
         self.from_ = 0
         self.to_ = FRAME_SIZE
@@ -39,6 +48,98 @@ class Score_Audio_Prediction:
         self.start_ = None
         self.vis_spec = None
         self.is_piece_end = False
+
+    def load_essentials(self):
+        if self.audio_path is not None:
+            self.signal_np = self.load_audio()
+
+        if self.score_path is not None:
+            self.org_scores, self.score, self.systems, self.interpol_fnc, self.pad, self.scale_factor = self.load_score()
+        else:
+            pass
+
+    def load_score(self, scale_width=416):
+        npzfile = np.load(self.score_path, allow_pickle=True)
+
+        org_scores = npzfile["sheets"]
+        coords, systems = list(npzfile["coords"]), list(npzfile['systems'])
+
+        synthesized = npzfile['synthesized'].item()
+        n_pages, h, w = org_scores.shape
+        dim_diff = np.abs(h - w)
+        pad1, pad2 = dim_diff // 2, dim_diff - dim_diff // 2
+
+        # Determine padding
+        pad = ((0, 0), (0, 0), (pad1, pad2))
+
+        # Add padding
+        padded_scores = np.pad(org_scores, pad, mode="constant", constant_values=255)
+
+        onsets = []
+        for i in range(len(coords)):
+            coords[i]['note_x'] += pad1
+
+            # onset time to frame
+            coords[i]['onset'] = int(coords[i]['onset'] * FPS)
+            onsets.append(coords[i]['onset'])
+
+        for i in range(len(systems)):
+            systems[i]['x'] += pad1
+
+        onsets = np.asarray(onsets, dtype=np.int)
+
+        onsets = np.unique(onsets)
+        coords_new = []
+        for onset in onsets:
+            onset_coords = list(filter(lambda x: x['onset'] == onset, coords))
+
+            onset_coords_merged = {}
+            for entry in onset_coords:
+                for key in entry:
+                    if key not in onset_coords_merged:
+                        onset_coords_merged[key] = []
+                    onset_coords_merged[key].append(entry[key])
+
+            # get system and page with most notes in it
+            system_idx = int(Counter(onset_coords_merged['system_idx']).most_common(1)[0][0])
+            note_x = np.mean(
+                np.asarray(onset_coords_merged['note_x'])[np.asarray(onset_coords_merged['system_idx']) == system_idx])
+            page_nr = int(Counter(onset_coords_merged['page_nr']).most_common(1)[0][0])
+
+            # set y to staff center
+            note_y = systems[system_idx]['y']
+            coords_new.append([note_y, note_x, system_idx, page_nr])
+
+        coords_new = np.asarray(coords_new)
+
+        # we want to match the frames to the coords of the previous onset, as the notes at the next coord position
+        # aren't played yet
+        interpol_fnc = interpolate.interp1d(onsets, coords_new.T, kind='previous', bounds_error=False,
+                                            fill_value=(coords_new[0, :], coords_new[-1, :]))
+
+        scores = 1 - np.array(padded_scores, dtype=np.float32) / 255.
+
+        # scale scores
+        scaled_score = []
+        scale_factor = scores[0].shape[0] / scale_width
+
+        for score in scores:
+            scaled_score.append(cv2.resize(score, (scale_width, scale_width), interpolation=cv2.INTER_AREA))
+
+        score = np.stack(scaled_score)
+
+        org_scores_rgb = []
+        for org_score in org_scores:
+            org_score = np.array(org_score, dtype=np.float32) / 255.
+
+            org_scores_rgb.append(cv2.cvtColor(org_score, cv2.COLOR_GRAY2BGR))
+
+        return org_scores_rgb, score, systems, interpol_fnc, pad1, scale_factor
+
+    def load_audio(self):
+        signal = load_wav(self.audio_path, sr=SAMPLE_RATE)
+        return signal
+
 
     def end_of_piece(self):
         return self.to_ > self.signal_np.shape[-1]
