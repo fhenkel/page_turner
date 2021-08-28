@@ -261,6 +261,9 @@ class Score_Audio_Prediction(threading.Thread):
             to_ += HOP_SIZE
             frame_idx += 1
 
+        if self.wave_file is not None:
+            self.wave_file.close()
+
         self.audio_stream.stop_stream()
         self.audio_stream.close()
         self.pa.terminate()
