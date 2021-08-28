@@ -261,6 +261,10 @@ class Score_Audio_Prediction(threading.Thread):
             to_ += HOP_SIZE
             frame_idx += 1
 
+        self.audio_stream.stop_stream()
+        self.audio_stream.close()
+        self.pa.terminate()
+
         self.is_piece_end = True
 
     def stop_playing(self):
