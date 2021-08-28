@@ -23,7 +23,8 @@ class Score_Audio_Prediction:
         self.audio_path = audio_path
         self.live_score = live_score
         self.score_path = score_path
-        self.org_scores, self.score, self.signal_np, self.systems, self.interpol_fnc, self.pad, self.scale_factor = [None] * 7
+        self.org_scores, self.score, self.signal_np, self.systems, self.interpol_fnc, self.pad, self.scale_factor,\
+            self.n_pages = [None] * 8
 
         self.audio_stream, self.wave_file = None, None
         self.pa = None
@@ -32,6 +33,7 @@ class Score_Audio_Prediction:
 
 
         self.load_essentials()
+        self.page_plots = self.load_page_plots()
 
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -73,7 +75,8 @@ class Score_Audio_Prediction:
             self.signal = None
 
         if self.score_path is not None:
-            self.org_scores, self.score, self.systems, self.interpol_fnc, self.pad, self.scale_factor = self.load_score()
+            self.org_scores, self.score, self.systems, self.interpol_fnc, self.pad, self.scale_factor, self.n_pages = \
+                self.load_score()
         else:
             pass
 
@@ -153,11 +156,19 @@ class Score_Audio_Prediction:
 
             org_scores_rgb.append(cv2.cvtColor(org_score, cv2.COLOR_GRAY2BGR))
 
-        return org_scores_rgb, score, systems, interpol_fnc, pad1, scale_factor
+        return org_scores_rgb, score, systems, interpol_fnc, pad1, scale_factor, n_pages
 
     def load_audio(self):
         signal = load_wav(self.audio_path, sr=SAMPLE_RATE)
         return signal
+
+    def load_page_plots(self):
+        page_plots = []
+        for curr_page in range(self.n_pages):
+            img_pred = cv2.cvtColor(self.org_scores[curr_page], cv2.COLOR_RGB2BGR)
+            page_plots.append(np.array((img_pred * 255), dtype=np.uint8))
+
+        return page_plots
 
     def end_of_piece(self):
         # return self.to_ > self.signal_np.shape[-1]
