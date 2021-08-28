@@ -16,7 +16,7 @@ from cyolo_score_following.utils.general import load_wav
 from scipy import interpolate
 
 
-class Score_Audio_Prediction(threading.Thread):
+class ScoreAudioPrediction(threading.Thread):
     def __init__(self, param_path, live_audio=None, audio_path=None, live_score=None, score_path=None,
                  gt_only=False, page=None):
         threading.Thread.__init__(self)
@@ -199,7 +199,7 @@ class Score_Audio_Prediction(threading.Thread):
             true_position = np.array(self.interpol_fnc(frame_idx), dtype=np.float32)
 
             if self.actual_page != int(true_position[-1]):
-                self.hidden = None
+                hidden = None
 
             self.actual_page = int(true_position[-1])
             system = self.systems[int(true_position[2])]
@@ -243,7 +243,7 @@ class Score_Audio_Prediction(threading.Thread):
                           color=(0.96, 0.63, 0.25), line_thickness=2)
 
                 if not self.gt_only:
-                    img_pred = plot_box([x1, y1, x2, y2], img_pred, label="Pred", color=(0, 0, 1), line_thickness=2)
+                    plot_box([x1, y1, x2, y2], img_pred, label="Pred", color=(0, 0, 1), line_thickness=2)
 
                 self.score_img = np.array((img_pred * 255), dtype=np.uint8)
                 spec_excerpt = cv2.resize(np.flipud(self.vis_spec), (round(self.vis_spec.shape[1] * self.scale_factor),
