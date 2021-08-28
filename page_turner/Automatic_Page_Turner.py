@@ -1,12 +1,9 @@
-# -*- coding: utf-8 -*-
+
 import os.path
-import sys
 from PyQt5 import QtWidgets, QtGui
 from PyQt5.QtWidgets import QMenu, QAction
-from PyQt5.QtCore import QTimer
 from pyqtgraph import PlotWidget
 from pyqtgraph.Qt import QtCore
-import pyqtgraph.ptime as ptime
 import pyqtgraph as pg
 import numpy as np
 import math
@@ -21,6 +18,7 @@ from PyQt5.QtWidgets import (
 )
 
 from prediction import Score_Audio_Prediction
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -77,8 +75,7 @@ class MainWindow(QMainWindow):
         vert_layout.addWidget(self.Scores_graphics)
         vert_layout.addWidget(self.audio_graphics)
         self.image_predictor = None
-        self.updateTime = ptime.time()
-        self.fps = 0
+        self.timer = None
 
         horiz_layout.addLayout(vert_layout)
         horiz_layout.addLayout(self.page_grid)
@@ -92,9 +89,9 @@ class MainWindow(QMainWindow):
         self.path = None
         self.choose_score.triggered.connect(lambda: self.choose_piece_dir("npz"))
         self.choose_audio.triggered.connect(lambda: self.choose_piece_dir("wav"))
-        self.choose_score.triggered.connect(self.create_prediction_object)
+        # self.choose_score.triggered.connect(self.create_prediction_object)
         self.choose_audio.triggered.connect(self.create_prediction_object)
-        self.live_score.triggered.connect(self.create_prediction_object)
+        # self.live_score.triggered.connect(self.create_prediction_object)
         self.live_audio.triggered.connect(self.create_prediction_object)
 
     def choose_piece_dir(self, extension):
@@ -129,21 +126,36 @@ class MainWindow(QMainWindow):
 
             self.page_grid.addWidget(self.page_graphics[i], math.floor(i/2), i % 2)
 
-
-
-
     def create_prediction_object(self):
-        if self.score_path is not None and self.audio_path is not None:
-            print(self.score_path)
-            print(self.audio_path)
-            self.image_predictor = Score_Audio_Prediction(self.param_path, audio_path=self.audio_path,
-                                                          score_path=self.score_path, gt_only=True, page=None)
-            self.load_pages()
-            self.updateData()
-        else:
-            pass
+        # TODO fix, now only called when audio is selected
 
-    def updateData(self):
+        # stop old tracking
+        if self.timer is not None:
+            self.timer.stop()
+
+        if self.image_predictor is not None:
+            self.image_predictor.stop_playing()
+            self.image_predictor = None
+
+        # reset page elements
+        self.page_graphics = []
+        self.image_items = []
+
+        print(self.score_path)
+        print(self.audio_path)
+        self.image_predictor = Score_Audio_Prediction(self.param_path, audio_path=self.audio_path,
+                                                      score_path=self.score_path, gt_only=True, page=None)
+
+        self.image_predictor.start()
+        self.load_pages()
+
+        # start update timer
+        self.timer = QtCore.QTimer()
+        self.timer.setInterval(1)
+        self.timer.timeout.connect(self.update_visualization)
+        self.timer.start()
+
+    def update_visualization(self):
         score_image, audio_image = self.image_predictor.get_next_images()
         if self.last_page != self.image_predictor.actual_page:
             self.page_graphics[self.last_page].setMinimumSize(250, 50)
@@ -154,16 +166,6 @@ class MainWindow(QMainWindow):
 
         self.score_img.setImage(score_image)
         self.audio_img.setImage(audio_image)
-        # creating a qtimer
-        QTimer.singleShot(1, self.updateData)
-        # getting current time
-        now = ptime.time()
-        # temporary fps
-        fps2 = 1.0 / (now - self.updateTime)
-        # updating the time
-        self.updateTime = now
-        # setting original fps value
-        self.fps = self.fps * 0.9 + fps2 * 0.1
 
     def _create_menu_bar(self):
         menu_bar = self.menuBar()
