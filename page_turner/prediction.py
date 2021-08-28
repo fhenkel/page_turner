@@ -1,5 +1,7 @@
 import cv2
+import pyaudio
 import torch
+import wave
 import numpy as np
 
 from cyolo_score_following.models.yolo import load_pretrained_model
@@ -22,6 +24,13 @@ class Score_Audio_Prediction:
         self.live_score = live_score
         self.score_path = score_path
         self.org_scores, self.score, self.signal_np, self.systems, self.interpol_fnc, self.pad, self.scale_factor = [None] * 7
+
+        self.audio_stream, self.wave_file = None, None
+        self.pa = None
+        self.score_img, self.spec_img = None, None
+        self.signal = None
+
+
         self.load_essentials()
 
 
@@ -34,8 +43,9 @@ class Score_Audio_Prediction:
         print("Number of parameters:", sum(p.numel() for p in self.network.parameters() if p.requires_grad))
         self.network.eval()
 
-        self.signal = torch.from_numpy(self.signal_np).to(device)
+        # self.signal = torch.from_numpy(self.signal_np).to(device)
         self.score_tensor = torch.from_numpy(self.score).unsqueeze(1).to(device)
+        self.device = device
 
         self.from_ = 0
         self.to_ = FRAME_SIZE
@@ -50,8 +60,17 @@ class Score_Audio_Prediction:
         self.is_piece_end = False
 
     def load_essentials(self):
+
+        self.pa = pyaudio.PyAudio()
         if self.audio_path is not None:
-            self.signal_np = self.load_audio()
+            # self.signal_np = self.load_audio()
+            self.wave_file = wave.open(self.audio_path, 'rb')
+            self.audio_stream = self.pa.open(format=self.pa.get_format_from_width(self.wave_file.getsampwidth()),
+                                             channels=self.wave_file.getnchannels(),
+                                             rate=self.wave_file.getframerate(),
+                                             output=True)
+
+            self.signal = None
 
         if self.score_path is not None:
             self.org_scores, self.score, self.systems, self.interpol_fnc, self.pad, self.scale_factor = self.load_score()
@@ -140,11 +159,24 @@ class Score_Audio_Prediction:
         signal = load_wav(self.audio_path, sr=SAMPLE_RATE)
         return signal
 
-
     def end_of_piece(self):
-        return self.to_ > self.signal_np.shape[-1]
+        # return self.to_ > self.signal_np.shape[-1]
+        return False
 
     def get_next_images(self):
+
+        data = self.wave_file.readframes(FRAME_SIZE//2)
+
+        if len(data) <= 0:
+            return None, None
+        self.audio_stream.write(data)
+
+        sig_excerpt = np.frombuffer(data, dtype=np.int16) / 2 ** 15
+        self.signal = np.concatenate((self.signal, sig_excerpt)) if self.signal is not None else sig_excerpt
+
+        if len(self.signal[self.from_:self.to_]) != FRAME_SIZE:
+            return None, None
+
         true_position = np.array(self.interpol_fnc(self.frame_idx), dtype=np.float32)
 
         if self.actual_page != int(true_position[-1]):
@@ -158,7 +190,8 @@ class Score_Audio_Prediction:
             self.start_ = self.from_ if self.start_ is None else self.start_
 
             with torch.no_grad():
-                sig_excerpt = self.signal[self.from_:self.to_]
+                # sig_excerpt = self.signal[self.from_:self.to_]
+                sig_excerpt = torch.from_numpy(self.signal[self.from_:self.to_]).float().to(self.device)
                 spec_frame = self.network.compute_spec([sig_excerpt], tempo_aug=False)[0]
 
                 z, self.hidden = self.network.conditioning_network.get_conditioning(spec_frame, hidden=self.hidden)
@@ -213,6 +246,9 @@ class Score_Audio_Prediction:
         self.frame_idx += 1
 
         self.is_piece_end = self.end_of_piece()
-        return score_img_data, spec_excerpt
+
+        self.score_img = score_img_data
+        self.spec_img = spec_excerpt
+        return self.score_img, self.spec_img
 
 

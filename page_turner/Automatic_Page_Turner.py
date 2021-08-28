@@ -111,8 +111,10 @@ class MainWindow(QMainWindow):
 
     def updateData(self):
         score_image, audio_image = self.image_predictor.get_next_images()
-        self.score_img.setImage(score_image)
-        self.audio_img.setImage(audio_image)
+
+        if score_image is not None:
+            self.score_img.setImage(score_image)
+            self.audio_img.setImage(audio_image)
         # creating a qtimer
         QTimer.singleShot(1, self.updateData)
         # getting current time
