@@ -144,7 +144,7 @@ class MainWindow(QMainWindow):
         print(self.score_path)
         print(self.audio_path)
         self.image_predictor = ScoreAudioPrediction(self.param_path, audio_path=self.audio_path,
-                                                    score_path=self.score_path, gt_only=True, page=None)
+                                                    score_path=self.score_path, gt_only=False, page=None)
 
         self.image_predictor.start()
         self.load_pages()

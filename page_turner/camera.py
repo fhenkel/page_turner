@@ -2,16 +2,17 @@ import cv2
 import multiprocessing
 import numpy as np
 
+from page_turner.config import *
+
 
 class Camera(multiprocessing.Process):
 
-    def __init__(self, pipe, scale_width=416):
+    def __init__(self, pipe):
         multiprocessing.Process.__init__(self)
 
         self.cap = cv2.VideoCapture(0)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1181)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 835)
-        self.scale_width = scale_width
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, SCORE_HEIGHT)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, SCORE_WIDTH)
         self.pipe = pipe
 
         self.continue_running = True
@@ -47,23 +48,16 @@ class Camera(multiprocessing.Process):
         # frame = frame[120:-180, 20:-75]
         frame = frame[70:-100, 0:-45]
         org_frame = org_frame[70:-100, 0:-45]
-        frame = cv2.resize(frame, (835, 1181), interpolation=cv2.INTER_AREA)
-        org_frame = cv2.resize(org_frame, (835, 1181), interpolation=cv2.INTER_AREA)
-
-        h, w = frame.shape
-
-        dim_diff = np.abs(h - w)
-        pad1, pad2 = dim_diff // 2, dim_diff - dim_diff // 2
-
-        # Determine padding
-        pad = ((0, 0), (pad1, pad2))
+        frame = cv2.resize(frame, (SCORE_WIDTH, SCORE_HEIGHT), interpolation=cv2.INTER_AREA)
+        org_frame = cv2.resize(org_frame, (SCORE_WIDTH, SCORE_HEIGHT), interpolation=cv2.INTER_AREA)
 
         # Add padding
+        pad = ((0, 0), (PADDING, PADDING))
         padded_score = np.pad(frame, pad, mode="constant", constant_values=255)
 
         score = 1 - np.array(padded_score, dtype=np.float32) / 255.
 
-        scaled_score = cv2.resize(score, (self.scale_width, self.scale_width), interpolation=cv2.INTER_AREA)
+        scaled_score = cv2.resize(score, (SCALE_WIDTH, SCALE_WIDTH), interpolation=cv2.INTER_AREA)
 
         # self.org_score = cv2.cvtColor(np.array(org_frame, dtype=np.float32) / 255., cv2.COLOR_GRAY2BGR)
         org_score = np.array(org_frame, dtype=np.float32) / 255.
@@ -78,7 +72,7 @@ if __name__ == "__main__":
     from multiprocessing import Pipe
 
     p_output, p_input = Pipe()
-    camera = Camera(pipe=p_output, scale_width=416)
+    camera = Camera(pipe=p_output)
 
     camera.start()
 

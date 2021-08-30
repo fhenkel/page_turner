@@ -13,6 +13,9 @@ from cyolo_score_following.utils.data_utils import SAMPLE_RATE, FPS, FRAME_SIZE,
 from cyolo_score_following.utils.general import xywh2xyxy
 from cyolo_score_following.utils.video_utils import plot_box, plot_line
 from cyolo_score_following.utils.general import load_wav
+from multiprocessing import Pipe
+from page_turner.camera import Camera
+from page_turner.config import *
 from scipy import interpolate
 
 
@@ -29,6 +32,8 @@ class ScoreAudioPrediction(threading.Thread):
         self.org_scores, self.score, self.systems, self.interpol_fnc, \
             self.pad, self.scale_factor, self.n_pages = [None] * 7
 
+        self.camera = None
+        self.p_output, self.p_input = None, None
         self.audio_stream, self.wave_file = None, None
         self.pa = None
         self.score_img, self.spec_img = None, None
@@ -70,9 +75,18 @@ class ScoreAudioPrediction(threading.Thread):
             self.org_scores, self.score, self.systems, self.interpol_fnc, self.pad, self.scale_factor, self.n_pages = \
                 self.load_score()
         else:
-            pass
+            self.p_output, self.p_input = Pipe()
+            self.camera = Camera(pipe=self.p_output)
+            self.camera.start()
 
-    def load_score(self, scale_width=416):
+            self.pad = PADDING
+            self.scale_factor = SCALE_FACTOR
+
+            org_score, scaled_score = self.p_input.recv()
+            self.org_scores = np.asarray([org_score])
+            self.score = np.asarray([scaled_score])
+
+    def load_score(self):
         npzfile = np.load(self.score_path, allow_pickle=True)
 
         org_scores = npzfile["sheets"]
@@ -134,10 +148,10 @@ class ScoreAudioPrediction(threading.Thread):
 
         # scale scores
         scaled_score = []
-        scale_factor = scores[0].shape[0] / scale_width
+        scale_factor = scores[0].shape[0] / SCALE_WIDTH
 
         for score in scores:
-            scaled_score.append(cv2.resize(score, (scale_width, scale_width), interpolation=cv2.INTER_AREA))
+            scaled_score.append(cv2.resize(score, (SCALE_WIDTH, SCALE_WIDTH), interpolation=cv2.INTER_AREA))
 
         score = np.stack(scaled_score)
 
@@ -155,14 +169,19 @@ class ScoreAudioPrediction(threading.Thread):
 
     def load_page_plots(self):
         page_plots = []
-        for curr_page in range(self.n_pages):
-            img_pred = cv2.cvtColor(self.org_scores[curr_page], cv2.COLOR_RGB2BGR)
-            page_plots.append(np.array((img_pred * 255), dtype=np.uint8))
+
+        if self.n_pages is not None:
+            for curr_page in range(self.n_pages):
+                img_pred = cv2.cvtColor(self.org_scores[curr_page], cv2.COLOR_RGB2BGR)
+                page_plots.append(np.array((img_pred * 255), dtype=np.uint8))
 
         return page_plots
 
     def get_next_images(self):
         return self.score_img, self.spec_img
+
+    def camera_input(self):
+        return self.camera is not None
 
     def run(self):
 
@@ -196,14 +215,26 @@ class ScoreAudioPrediction(threading.Thread):
             if len(signal[from_:to_]) != FRAME_SIZE:
                 continue
 
-            true_position = np.array(self.interpol_fnc(frame_idx), dtype=np.float32)
+            if self.camera_input():
+                self.actual_page = 0
+                self.track_page = 0
 
-            if self.actual_page != int(true_position[-1]):
-                hidden = None
+                if self.p_input.poll():
+                    org_score, scaled_score = self.p_input.recv()
+                    self.org_scores = np.asarray([org_score])
+                    self.score = np.asarray([scaled_score])
 
-            self.actual_page = int(true_position[-1])
-            system = self.systems[int(true_position[2])]
-            true_position = true_position[:2]
+                score_tensor = torch.from_numpy(self.score).unsqueeze(0).to(self.device)
+
+            else:
+                true_position = np.array(self.interpol_fnc(frame_idx), dtype=np.float32)
+
+                if self.actual_page != int(true_position[-1]):
+                    hidden = None
+
+                self.actual_page = int(true_position[-1])
+                system = self.systems[int(true_position[2])]
+                true_position = true_position[:2]
 
             if self.track_page is None or self.actual_page == self.track_page:
                 self.start_ = from_ if self.start_ is None else self.start_
@@ -233,14 +264,16 @@ class ScoreAudioPrediction(threading.Thread):
 
                 self.vis_spec[:, -1] = spec_frame[0].cpu().numpy()
 
-                height = system['h'] / 2
-                center_y, center_x = true_position
-
                 # that is what i need for the app
                 img_pred = cv2.cvtColor(self.org_scores[self.actual_page], cv2.COLOR_RGB2BGR)
 
-                plot_line([center_x - self.pad, center_y, height], img_pred, label="GT",
-                          color=(0.96, 0.63, 0.25), line_thickness=2)
+                if not self.camera_input():
+
+                    height = system['h'] / 2
+                    center_y, center_x = true_position
+
+                    plot_line([center_x - self.pad, center_y, height], img_pred, label="GT",
+                              color=(0.96, 0.63, 0.25), line_thickness=2)
 
                 if not self.gt_only:
                     plot_box([x1, y1, x2, y2], img_pred, label="Pred", color=(0, 0, 1), line_thickness=2)
