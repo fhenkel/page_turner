@@ -21,14 +21,17 @@ from prediction import ScoreAudioPrediction
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, audio_path, score_path, model_path, ground_truth_box_states,
+                            prediction_box_states):
         super().__init__()
         self.default_path = os.path.join('..', 'demo_piece')
-        self.param_path = os.path.join('..', 'models', 'test_model', 'best_model.pt')
-        self.audio_path = None
-        self.score_path = None
-        self.live_audio = None
-        self.live_score = None
+        self.param_path = model_path
+        self.audio_path = audio_path
+        self.score_path = score_path
+        self.ground_truth_box_states = ground_truth_box_states
+        self.prediction_box_states = prediction_box_states
+        print(audio_path, score_path, model_path, ground_truth_box_states,
+                            prediction_box_states)
         self.last_page = 0
 
         self.setWindowTitle("Automatic Page Turner")
@@ -85,25 +88,7 @@ class MainWindow(QMainWindow):
         # Set the central widget of the Window.
         self.setCentralWidget(container)
 
-        self._create_menu_bar()
-        self.path = None
-        self.choose_score.triggered.connect(lambda: self.choose_piece_dir("npz"))
-        self.choose_audio.triggered.connect(lambda: self.choose_piece_dir("wav"))
-        # self.choose_score.triggered.connect(self.create_prediction_object)
-        self.choose_audio.triggered.connect(self.create_prediction_object)
-        # self.live_score.triggered.connect(self.create_prediction_object)
-        self.live_audio.triggered.connect(self.create_prediction_object)
-
-    def choose_piece_dir(self, extension):
-        print(os.getcwd())
-        curr_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, 'Select one piece', self.default_path,
-                                                             f"(*.{extension})",
-                                                             options=QFileDialog.DontUseNativeDialog)
-        print(self.path)
-        if extension == "wav":
-            self.audio_path = curr_path
-        elif extension == "npz":
-            self.score_path = curr_path
+        self.create_prediction_object()
 
     def load_pages(self):
         for i, page in enumerate(self.image_predictor.page_plots):
@@ -166,62 +151,6 @@ class MainWindow(QMainWindow):
 
         self.score_img.setImage(score_image)
         self.audio_img.setImage(audio_image)
-
-    def _create_menu_bar(self):
-        menu_bar = self.menuBar()
-        self.menu_piece = QMenu("&Piece", self)
-        menu_bar.addMenu(self.menu_piece)
-        self.choose_score = QAction("&Choose Score", self)
-        self.choose_audio = QAction("&Choose Audio", self)
-        self.live_score = QAction("&Live Score", self)
-        self.live_audio = QAction("&Live Audio", self)
-        self.menu_piece.addAction(self.choose_score)
-        self.menu_piece.addAction(self.choose_audio)
-        self.menu_piece.addAction(self.live_score)
-        self.menu_piece.addAction(self.live_audio)
-
-        self.menu_view = QMenu("&View", self)
-        menu_bar.addMenu(self.menu_view)
-
-        self.menu_show_ground_truth = self.menu_view.addMenu("view ground truth")
-        self.action_ground_truth_Note_Level = QAction("&Note Level", self)
-        self.action_ground_truth_Note_Level.triggered.connect(
-            lambda: self.activate_action(self.action_ground_truth_Note_Level))
-
-        self.action_ground_truth_Bar_Level = QAction("&Bar Level", self)
-        self.action_ground_truth_Bar_Level.triggered.connect(
-            lambda: self.activate_action(self.action_ground_truth_Bar_Level))
-        self.action_ground_truth_System_Level = QAction("&System Level", self)
-        self.action_ground_truth_System_Level.triggered.connect(
-            lambda: self.activate_action(self.action_ground_truth_System_Level))
-        self.menu_show_ground_truth.addAction(self.action_ground_truth_Note_Level)
-        self.menu_show_ground_truth.addAction(self.action_ground_truth_Bar_Level)
-        self.menu_show_ground_truth.addAction(self.action_ground_truth_System_Level)
-
-        self.menu_prediction_level = self.menu_view.addMenu("prediction level")
-        self.action_prediction_Note_level = QAction("&Note Level", self)
-        self.action_prediction_Note_level.triggered.connect(
-            lambda: self.activate_action(self.action_prediction_Note_level))
-        self.action_prediction_Bar_level = QAction("&Bar Level", self)
-        self.action_prediction_Bar_level.triggered.connect(
-            lambda: self.activate_action(self.action_prediction_Bar_level))
-        self.action_prediction_System_level = QAction("&System Level", self)
-        self.action_prediction_System_level.triggered.connect(
-            lambda: self.activate_action(self.action_prediction_System_level))
-        self.menu_prediction_level.addAction(self.action_prediction_Note_level)
-        self.menu_prediction_level.addAction(self.action_prediction_Bar_level)
-        self.menu_prediction_level.addAction(self.action_prediction_System_level)
-
-        self.menu_model = QMenu("&Model", self)
-        menu_bar.addMenu(self.menu_model)
-        self.actionDefault = QAction("&Default", self)
-        self.actionDefault.triggered.connect(lambda: self.activate_action(self.actionDefault))
-        self.menu_model.addAction(self.actionDefault)
-
-    def activate_action(self, action):
-        myFont = QtGui.QFont()
-        myFont.setBold(not action.font().bold())
-        action.setFont(myFont)
 
 
 if __name__ == "__main__":
