@@ -15,11 +15,9 @@ class Camera(multiprocessing.Process):
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, SCORE_WIDTH)
         self.pipe = pipe
 
-        self.continue_running = True
-
     def run(self):
 
-        while self.continue_running:
+        while True:
             self.take_picture()
 
     def take_picture(self):
@@ -64,8 +62,9 @@ class Camera(multiprocessing.Process):
 
         self.pipe.send((org_score, scaled_score))
 
-    def stop_running(self):
-        self.continue_running = False
+    def terminate(self):
+        self.cap.release()
+        super(Camera, self).terminate()
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
-from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QApplication, QDialog, QFileDialog, QDialogButtonBox
-from Automatic_Page_Turner import MainWindow
 import os
+
+from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtWidgets import QDialog, QFileDialog, QDialogButtonBox
 
 
 class DialogWindow(QDialog):
@@ -16,18 +16,11 @@ class DialogWindow(QDialog):
 
         self.gridLayout = QtWidgets.QGridLayout()
 
-        # the 'Start Tracking' and 'Cancel' buttons
-        self.buttonBox = QDialogButtonBox()
-        self.buttonBox.setGeometry(QtCore.QRect(270, 430, 341, 32))
-        self.buttonBox.setOrientation(QtCore.Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Cancel | QtWidgets.QDialogButtonBox.Ok)
-        self.buttonBox.button(QDialogButtonBox.Ok).setText("Start Tracking")
-        self.buttonBox.accepted.connect(self.accept)
-        self.buttonBox.rejected.connect(self.reject)
+        # setup ok button
+        ok_button = QtWidgets.QPushButton("ok")
+        ok_button.clicked.connect(self.open_main_window)
 
-        self.buttonBox.accepted.connect(self.open_main_window)
-
-        self.gridLayout.addWidget(self.buttonBox, 9, 4, 1, 1)
+        self.gridLayout.addWidget(ok_button, 9, 4, 1, 1)
 
         # 'Piece' text part
         self.piece_label = QtWidgets.QLabel("Piece", self)
@@ -157,6 +150,9 @@ class DialogWindow(QDialog):
         # this initializes all important variables and connects the dropdowns
         self.audio_path = None
         self.score_path = None
+        self.prediction_box_states = None
+        self.ground_truth_box_states = None
+
         self.model_path = os.path.join('..', 'models', 'test_model', 'best_model.pt')
         self.window = None
         self.audio_dropdown.activated[str].connect(self.react_to_audio_dropdown)
@@ -169,14 +165,11 @@ class DialogWindow(QDialog):
         with all parameters, when the button 'Start tracking' is clicked.
         :return:
         """
-        prediction_box_states = [self.prediction_note_box.isChecked(), self.prediction_bar_box.isChecked(),
-                                 self.prediction_system_box.isChecked()]
-        ground_truth_box_states = [self.gtruth_note_box.isChecked(), self.gtruth_bar_box.isChecked(),
-                                 self.gtruth_system_box.isChecked()]
-        self.window = MainWindow(self.audio_path, self.score_path, self.model_path, ground_truth_box_states,
-                            prediction_box_states)
-        self.window.show()
-        self.window.exec_()
+        self.prediction_box_states = [self.prediction_note_box.isChecked(), self.prediction_bar_box.isChecked(),
+                                      self.prediction_system_box.isChecked()]
+        self.ground_truth_box_states = [self.gtruth_note_box.isChecked(), self.gtruth_bar_box.isChecked(),
+                                        self.gtruth_system_box.isChecked()]
+        self.close()
 
     def react_to_audio_dropdown(self, text):
         """
@@ -188,6 +181,11 @@ class DialogWindow(QDialog):
         """
         if text == "choose from library":
             self.choose_piece_dir("wav")
+        elif text == "live":
+            # set live input
+            self.set_path(None, "wav")
+        else:
+            raise NotImplementedError
 
     def react_to_score_dropdown(self, text):
         """
@@ -197,8 +195,14 @@ class DialogWindow(QDialog):
             :param text: "live" or "choose from library"
             :return:
         """
+
         if text == "choose from library":
             self.choose_piece_dir("npz")
+        elif text == "live":
+            # set live input
+            self.set_path(None, "npz")
+        else:
+            raise NotImplementedError
 
     def react_to_model_dropdown(self, text):
         """
@@ -210,8 +214,12 @@ class DialogWindow(QDialog):
         """
         if text == "choose local":
             self.choose_piece_dir("pt", os.path.join('..', 'models'))
+        elif text == "default":
+            self.model_path = os.path.join('..', 'models', 'test_model', 'best_model.pt')
+        else:
+            raise NotImplementedError
 
-    def choose_piece_dir(self, extension, path=None):
+    def choose_piece_dir(self, extension, path=None, ):
         """
         This function opens a dialog window to choose a file
         with a specific extension in the default path or in another chosen path.
@@ -227,17 +235,13 @@ class DialogWindow(QDialog):
         curr_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, 'Select one piece', search_path,
                                                              f"(*.{extension})",
                                                              options=QFileDialog.DontUseNativeDialog)
+
+        self.set_path(curr_path, extension)
+
+    def set_path(self, path, extension):
         if extension == "wav":
-            self.audio_path = curr_path
+            self.audio_path = path
         elif extension == "npz":
-            self.score_path = curr_path
+            self.score_path = path
         elif extension == "pt":
-            self.model_path = curr_path
-
-
-if __name__ == "__main__":
-    app = QApplication([])
-    window = DialogWindow()
-    window.show()
-    app.exec()
-
+            self.model_path = path

@@ -56,7 +56,7 @@ class ScoreAudioPrediction(threading.Thread):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.network, criterion = load_pretrained_model(param_path)
 
-        print(self.network)
+        # print(self.network)
         print("Putting model to %s ..." % self.device)
         self.network.to(self.device)
         print("Number of parameters:", sum(p.numel() for p in self.network.parameters() if p.requires_grad))
@@ -329,6 +329,10 @@ class ScoreAudioPrediction(threading.Thread):
         self.audio_stream.stop_stream()
         self.audio_stream.close()
         self.pa.terminate()
+
+        if self.camera_input():
+            self.camera.terminate()
+            self.camera.join()
 
         self.is_piece_end = True
 

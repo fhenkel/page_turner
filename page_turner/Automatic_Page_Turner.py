@@ -5,6 +5,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QWidget,
     QApplication,
+    QPushButton,
     QMainWindow,
     QVBoxLayout,
     QHBoxLayout,
@@ -13,33 +14,19 @@ from PyQt5.QtWidgets import (
     QFrame
 )
 
-from prediction import ScoreAudioPrediction
+from page_turner.dialog import DialogWindow
+from page_turner.prediction import ScoreAudioPrediction
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, audio_path, score_path, model_path, ground_truth_box_states,
-                            prediction_box_states):
-        """
-        This function initializes the main window for the page turner application.
-        :param audio_path: None (if live) or the path to the .wav file of the audio
-        :param score_path: None (if live) or the path to the .npz file of the score
-        :param model_path: path leading to the chosen model loaded from a .pt file
-        :param ground_truth_box_states: list containing the boolean values for showing different levels
-                                        of ground truth [note, bar, system]
-        :param prediction_box_states: list containing the boolean values for showing different levels
-                                      of prediction [note, bar, system]
-        """
+    def __init__(self):
+
         super().__init__()
         self.setWindowTitle("Automatic Page Turner")
         self.resize(1500, 900)
-        
-        self.param_path = model_path
-        self.audio_path = audio_path
-        self.score_path = score_path
 
-        # TODO Following two NOT USED YET
-        self.ground_truth_box_states = ground_truth_box_states
-        self.prediction_box_states = prediction_box_states
+        self.param_path, self.audio_path, self.score_path = None, None, None
+        self.ground_truth_box_states, self.prediction_box_states = None, None
 
         self.last_page = 0
         # used for page-click event
@@ -97,20 +84,53 @@ class MainWindow(QMainWindow):
         vert_layout.addWidget(self.Scores_graphics)
         vert_layout.addWidget(self.audio_graphics)
 
+        # input data dialog
+        self.dialog = DialogWindow()
+
+        # start/stop buttons
+        self.start_tracking_button = QPushButton("Start tracking...")
+        self.start_tracking_button.clicked.connect(self.start_tracking)
+
+        self.stop_tracking_button = QPushButton("Stop tracking...")
+        self.stop_tracking_button.clicked.connect(self.stop_tracking)
+        vert_layout.addWidget(self.start_tracking_button)
+        vert_layout.addWidget(self.stop_tracking_button)
+
         # image predictor will be an instance of ScoreAudioPrediction
         # to process score and audio
         self.image_predictor = None
         self.timer = None
 
         horiz_layout.addLayout(vert_layout)
-        if self.audio_path is not None:
-            horiz_layout.addWidget(self.scroll)
+        # if self.audio_path is not None:
+        horiz_layout.addWidget(self.scroll)
         container = QWidget()
         container.setLayout(horiz_layout)
 
         # Set the central widget of the Window.
         self.setCentralWidget(container)
 
+    def stop_tracking(self):
+        if self.timer is not None:
+            self.timer.stop()
+
+        if self.image_predictor is not None:
+            self.image_predictor.stop_playing()
+
+    def start_tracking(self):
+        self.stop_tracking()
+
+        self.dialog.exec()
+
+        self.param_path = self.dialog.model_path  # path leading to the chosen model loaded from a .pt file
+        self.audio_path = self.dialog.audio_path  # None (if live) or the path to the .wav file of the audio
+        self.score_path = self.dialog.score_path  # None (if live) or the path to the .npz file of the score
+
+        # list containing the boolean values for showing different levels of ground truth [note, bar, system]
+        self.ground_truth_box_states = self.dialog.ground_truth_box_states
+
+        # list containing the boolean values for showing different levels of prediction [note, bar, system]
+        self.prediction_box_states = self.dialog.prediction_box_states
         self.create_prediction_object()
 
     def load_pages(self):
@@ -119,6 +139,7 @@ class MainWindow(QMainWindow):
         in the self.page_grid
         :return:
         """
+
         for i, page in enumerate(self.image_predictor.page_plots):
             gv = pg.GraphicsView()
             gv.setFixedSize(250, 400)
@@ -148,6 +169,9 @@ class MainWindow(QMainWindow):
         self.scroll_widget.setLayout(self.page_grid)
         self.scroll.setWidget(self.scroll_widget)
 
+        # self.scroll.update()
+        # self.scroll_widget.update()
+
     def show_clicked_page(self, index):
         """
         This function changes the score page which is shown in big, to
@@ -168,19 +192,13 @@ class MainWindow(QMainWindow):
         and starts the image prediction process and its visualization updates.
         :return:
         """
-        # TODO fix, now only called when audio is selected
-
-        # stop old tracking
-        if self.timer is not None:
-            self.timer.stop()
-
-        if self.image_predictor is not None:
-            self.image_predictor.stop_playing()
-            self.image_predictor = None
 
         # reset page elements
         self.page_graphics = []
         self.image_items = []
+
+        for i in reversed(range(self.page_grid.count())):
+            self.page_grid.itemAt(i).widget().setParent(None)
 
         self.image_predictor = ScoreAudioPrediction(self.param_path, audio_path=self.audio_path,
                                                     score_path=self.score_path, gt_only=False, page=None)
@@ -218,12 +236,6 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication([])
-    audio_path = '/home/stephanie/Documents/Studium/Automatic_Page_Turning/page_turner/demo_piece/ChopinFF__O9__nocturne_in_b-flat_minor_synth.wav'
-    score_path = '/home/stephanie/Documents/Studium/Automatic_Page_Turning/page_turner/demo_piece/ChopinFF__O9__nocturne_in_b-flat_minor_synth.npz'
-    model_path = '../models/test_model/best_model.pt'
-    ground_truth_box_states = [False] * 3
-    prediction_box_states = [False] * 3
-    window = MainWindow(audio_path, score_path, model_path, ground_truth_box_states,
-                            prediction_box_states)
+    window = MainWindow()
     window.show()
     app.exec_()
