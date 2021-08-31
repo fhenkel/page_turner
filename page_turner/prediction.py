@@ -1,5 +1,6 @@
 import cv2
 import pyaudio
+import serial
 import torch
 import threading
 import wave
@@ -7,7 +8,7 @@ import wave
 import matplotlib.cm as cm
 import numpy as np
 
-from collections import Counter
+from collections import Counter, deque
 from cyolo_score_following.models.yolo import load_pretrained_model
 from cyolo_score_following.utils.data_utils import SAMPLE_RATE, FPS, FRAME_SIZE, HOP_SIZE
 from cyolo_score_following.utils.general import xywh2xyxy
@@ -224,7 +225,7 @@ class ScoreAudioPrediction(threading.Thread):
 
         hidden = None
         frame_idx = 0
-
+        ctpes = deque(np.zeros(60), maxlen=60)
         while not self.is_piece_end:
 
             if self.wave_file is None:
@@ -255,6 +256,18 @@ class ScoreAudioPrediction(threading.Thread):
 
                 score_tensor = torch.from_numpy(self.score).unsqueeze(0).to(self.device)
 
+                print(np.mean(ctpes))
+                if np.mean(ctpes) > 0.5:
+                    print('Turn page')
+                    hidden = None
+                    try:
+                        with serial.Serial('/dev/ttyUSB0', 9600, timeout=1) as ser:
+                            ser.write(serial.to_bytes([0xA0, 0x01, 0x01, 0xA2]))
+                            # time.sleep(1)
+                            ser.write(serial.to_bytes([0xA0, 0x01, 0x00, 0xA1]))
+                    except:
+                        print("Physical page turning not possible. Did you run sudo chown <user> /dev/ttyUSB0 ?")
+
             else:
                 true_position = np.array(self.interpol_fnc(frame_idx), dtype=np.float32)
 
@@ -275,8 +288,9 @@ class ScoreAudioPrediction(threading.Thread):
                     z, hidden = self.network.conditioning_network.get_conditioning(spec_frame, hidden=hidden)
                     inference_out, pred = self.network.predict(score_tensor[self.actual_page:self.actual_page + 1], z)
 
-                _, idx = torch.sort(inference_out[0, :, 4], descending=True)
-                filtered_pred = inference_out[0, idx[:1]]
+                filtered_inference_out = inference_out[0, inference_out[0, :, -1] == 0].unsqueeze(0)
+                _, idx = torch.sort(filtered_inference_out[0, :, 4], descending=True)
+                filtered_pred = filtered_inference_out[0, idx[:1]]
                 box = filtered_pred[..., :4]
                 conf = filtered_pred[..., 4]
                 x1, y1, x2, y2 = xywh2xyxy(box).cpu().numpy().T
@@ -285,6 +299,9 @@ class ScoreAudioPrediction(threading.Thread):
                 x2 = x2 * self.scale_factor - self.pad
                 y1 = y1 * self.scale_factor
                 y2 = y2 * self.scale_factor
+
+                ctpe = filtered_pred[..., 5]
+                ctpes.append(ctpe.item())
 
                 if self.vis_spec is not None:
                     self.vis_spec = np.roll(self.vis_spec, -1, axis=1)
