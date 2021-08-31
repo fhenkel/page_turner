@@ -22,6 +22,16 @@ from scipy import interpolate
 class ScoreAudioPrediction(threading.Thread):
     def __init__(self, param_path, live_audio=None, audio_path=None, live_score=None, score_path=None,
                  gt_only=False, page=None):
+        """
+        This function initializes an instance of the class.
+        :param param_path: full path to the model loaded
+        :param live_audio:
+        :param audio_path: None or full path to the .wav file of the audio chosen
+        :param live_score:
+        :param score_path: None or full path to the .npz file of the score chosen
+        :param gt_only: whether to also show the prediction or only the ground truth
+        :param page:
+        """
         threading.Thread.__init__(self)
 
         self.gt_only = gt_only
@@ -38,7 +48,9 @@ class ScoreAudioPrediction(threading.Thread):
         self.pa = None
         self.score_img, self.spec_img = None, None
 
+        # load all essential variables from files or for live
         self.load_essentials()
+        # load the plots of the pages for the score page overview
         self.page_plots = self.load_page_plots()
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -57,7 +69,12 @@ class ScoreAudioPrediction(threading.Thread):
         self.is_piece_end = False
 
     def load_essentials(self):
-
+        """
+        This function loads all essential variables for running.
+        Either from .wav files or live audio and either from .npz files
+        or live score images.
+        :return:
+        """
         self.pa = pyaudio.PyAudio()
         if self.audio_path is not None:
             # read from file
@@ -87,6 +104,10 @@ class ScoreAudioPrediction(threading.Thread):
             self.score = np.asarray([scaled_score])
 
     def load_score(self):
+        """
+        This function loads all variables required from the score.
+        :return:
+        """
         npzfile = np.load(self.score_path, allow_pickle=True)
 
         org_scores = npzfile["sheets"]
@@ -164,10 +185,19 @@ class ScoreAudioPrediction(threading.Thread):
         return org_scores_rgb, score, systems, interpol_fnc, pad1, scale_factor, n_pages
 
     def load_audio(self):
+        """
+        This function loads all variables required from the audio.
+        :return:
+        """
         signal = load_wav(self.audio_path, sr=SAMPLE_RATE)
         return signal
 
     def load_page_plots(self):
+        """
+        This function loads the plots for all score pages,
+        which will be shown in a grid in the main application.
+        :return: page_plots: numpy arrays for each score page
+        """
         page_plots = []
 
         if self.n_pages is not None:
@@ -184,7 +214,6 @@ class ScoreAudioPrediction(threading.Thread):
         return self.camera is not None
 
     def run(self):
-
         self.is_piece_end = False
         signal = None
 
