@@ -1,6 +1,7 @@
 import cv2
 import pyaudio
 import serial
+import scipy
 import torch
 import threading
 import wave
@@ -18,6 +19,61 @@ from multiprocessing import Pipe
 from page_turner.camera import Camera
 from page_turner.config import *
 from scipy import interpolate
+
+
+def find_system_ys(img):
+    pxl = img.sum(-1)
+
+    pxl_th = pxl.max() / 2
+
+    pxl[pxl < pxl_th] = 0
+    pxl[pxl >= pxl_th] = 1
+
+    kernel_size = 10
+    kernel = np.ones(kernel_size)
+    # kernel[kernel_size//2:] = 1
+
+    staff_indicator = scipy.convolve(pxl, kernel, mode="same")
+    staff_indicator[staff_indicator < 1] = 0
+    staff_indicator[staff_indicator >= 1] = 1
+
+    systems = []
+
+    i = 0
+    while i < len(staff_indicator):
+
+        if staff_indicator[i] == 1:
+            start = i
+
+            while staff_indicator[i] == 1:
+                i += 1
+            end = i - 1
+
+
+            systems.append((start, end))
+
+        else:
+            i += 1
+
+    i = 0
+    system_means = []
+    while i + 1 < len(systems):
+        s1 = systems[i]
+
+        # system has to be at least 20 pixel high
+        if s1[1] - s1[0] > 20:
+            s2 = systems[i + 1]
+        else:
+            i += 1
+            continue
+
+
+        # system_means.append(s1[0] + (s2[1] - s1[0]) / 2)
+        system_means.append((s1[0], s2[1]))
+
+        i += 2
+
+    return system_means
 
 
 class ScoreAudioPrediction(threading.Thread):
@@ -223,9 +279,13 @@ class ScoreAudioPrediction(threading.Thread):
 
         score_tensor = torch.from_numpy(self.score).unsqueeze(1).to(self.device)
 
+        system_ys = find_system_ys((1 - cv2.cvtColor(self.org_scores[self.actual_page], cv2.COLOR_BGR2GRAY)))
         hidden = None
         frame_idx = 0
         ctpes = deque(np.zeros(60), maxlen=60)
+
+        curr_y = 0
+        curr_x = 0
         while not self.is_piece_end:
 
             if self.wave_file is None:
@@ -271,10 +331,22 @@ class ScoreAudioPrediction(threading.Thread):
             else:
                 true_position = np.array(self.interpol_fnc(frame_idx), dtype=np.float32)
 
-                if self.actual_page != int(true_position[-1]):
+
+                # if self.actual_page != int(true_position[-1]):
+                if system_ys[-1][0] <= curr_y <= system_ys[-1][1] and\
+                        curr_x > 3*self.org_scores[self.actual_page].shape[1] / 4:
+                # if self.actual_page != int(true_position[-1]):
                     hidden = None
 
-                self.actual_page = int(true_position[-1])
+                    # self.actual_page = int(true_position[-1])
+
+                    if self.actual_page + 1 < len(self.org_scores):
+                        self.actual_page += 1
+
+
+                    system_ys = find_system_ys(
+                        (1 - cv2.cvtColor(self.org_scores[self.actual_page], cv2.COLOR_BGR2GRAY)))
+
                 system = self.systems[int(true_position[2])]
                 true_position = true_position[:2]
 
@@ -300,6 +372,8 @@ class ScoreAudioPrediction(threading.Thread):
                 y1 = y1 * self.scale_factor
                 y2 = y2 * self.scale_factor
 
+                curr_y = y1 + (y2 - y1)/2
+                curr_x = x1 + (x2 - x1)/2
                 ctpe = filtered_pred[..., 5]
                 ctpes.append(ctpe.item())
 

@@ -153,7 +153,7 @@ class DialogWindow(QDialog):
         self.prediction_box_states = None
         self.ground_truth_box_states = None
 
-        self.model_path = os.path.join('..', 'models', 'test_model', 'best_model.pt')
+        self.model_path = os.path.join('..', 'models', 'eop_model', 'best_model.pt')
         self.window = None
         self.audio_dropdown.activated[str].connect(self.react_to_audio_dropdown)
         self.score_dropdown.activated[str].connect(self.react_to_score_dropdown)
