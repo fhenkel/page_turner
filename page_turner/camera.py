@@ -1,8 +1,11 @@
 import cv2
 import multiprocessing
+import subprocess
+
 import numpy as np
 
 from page_turner.config import *
+from page_turner.utils import find_system_ys
 
 
 class Camera(multiprocessing.Process):
@@ -15,6 +18,10 @@ class Camera(multiprocessing.Process):
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, SCORE_WIDTH)
         self.pipe = pipe
 
+        # set custom focus for camera (probably camera specific, please change accordingly)
+        subprocess.run(["v4l2-ctl", "-d", "/dev/video0", "--set-ctrl=focus_auto=0"])
+        subprocess.run(["v4l2-ctl", "-d", "/dev/video0", "--set-ctrl=focus_absolute=30"])
+
     def run(self):
 
         while True:
@@ -25,27 +32,13 @@ class Camera(multiprocessing.Process):
         org_frame = cv2.rotate(frame, cv2.cv2.ROTATE_90_COUNTERCLOCKWISE)
         frame = cv2.cvtColor(org_frame, cv2.COLOR_BGR2GRAY)
 
-        # img_edges = cv2.Canny(frame, 100, 100, apertureSize=3)
-        # lines = cv2.HoughLinesP(img_edges, 1, math.pi / 180.0, 100, minLineLength=100, maxLineGap=5)
-        #
-        # angles = []
-        #
-        # for [[x1, y1, x2, y2]] in lines:
-        #     angle = math.degrees(math.atan2(y2 - y1, x2 - x1))
-        #     angles.append(angle)
-        #
-        # median_angle = np.median(angles)
-        #
-        # frame = ndimage.rotate(frame, median_angle)
-        # org_frame = ndimage.rotate(org_frame, median_angle)
+        frame = cv2.adaptiveThreshold(frame, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 5)
 
-        frame = cv2.adaptiveThreshold(frame, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-        # frame = cv2.fastNlMeansDenoising(frame, 11, 31, 9)
-
-        # frame = frame[100:-280, 50:-50]
-        # frame = frame[120:-180, 20:-75]
+        # crop score
         frame = frame[70:-100, 0:-45]
         org_frame = org_frame[70:-100, 0:-45]
+
+        # resize
         frame = cv2.resize(frame, (SCORE_WIDTH, SCORE_HEIGHT), interpolation=cv2.INTER_AREA)
         org_frame = cv2.resize(org_frame, (SCORE_WIDTH, SCORE_HEIGHT), interpolation=cv2.INTER_AREA)
 
@@ -60,7 +53,9 @@ class Camera(multiprocessing.Process):
         # self.org_score = cv2.cvtColor(np.array(org_frame, dtype=np.float32) / 255., cv2.COLOR_GRAY2BGR)
         org_score = np.array(org_frame, dtype=np.float32) / 255.
 
-        self.pipe.send((org_score, scaled_score))
+        system_ys = find_system_ys(org_score, thicken_lines=True)
+
+        self.pipe.send((org_score, scaled_score, system_ys))
 
     def terminate(self):
         self.cap.release()
@@ -77,7 +72,11 @@ if __name__ == "__main__":
 
     while True:
         if p_input.poll():
-            org_img, scaled_img = p_input.recv()
+            org_img, scaled_img, system_ys = p_input.recv()
+
+            for s in system_ys:
+                cv2.line(org_img, (0, s[0]), (org_img.shape[1], s[0]), color=(0, 255, 0))
+                cv2.line(org_img, (0, s[1]), (org_img.shape[1], s[1]), color=(0, 255, 0))
 
             cv2.imshow('Original Image', org_img)
             cv2.imshow('Scaled Image', scaled_img)
