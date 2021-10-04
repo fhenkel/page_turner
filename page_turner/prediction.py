@@ -7,6 +7,7 @@ import threading
 import matplotlib.cm as cm
 import numpy as np
 
+from collections import deque
 from cyolo_score_following.models.yolo import load_pretrained_model
 from cyolo_score_following.utils.data_utils import SAMPLE_RATE, FPS, FRAME_SIZE, HOP_SIZE
 from cyolo_score_following.utils.general import xywh2xyxy
@@ -34,6 +35,7 @@ class ScoreAudioPrediction(threading.Thread):
         self.org_scores, self.score, self.pad, self.scale_factor = [None] * 4
 
         self.score_img, self.spec_img = None, None
+        self.previous_prediction = None
 
         self.audio_stream = AudioStream(self.audio_path)
         self.image_stream = ImageStream(self.score_path, n_pages)
@@ -53,99 +55,68 @@ class ScoreAudioPrediction(threading.Thread):
     def get_next_images(self):
         return self.score_img, self.spec_img
 
-    def get_best_prediction(self, predictions, systems, th=0.5, start_from_top=False):
+    def get_best_prediction(self, predictions, systems, start_from_top=False):
+
         _, idx = torch.sort(predictions[:, 4], descending=True)
         sorted_predictions = predictions[idx]
 
         sorted_predictions[:, :4] *= self.image_stream.scale_factor
         sorted_predictions[:, 0] -= self.image_stream.pad
 
-
-
-        # x1, y1, x2, y2 = xywh2xyxy(sorted_predictions[:, :4]).cpu().numpy().T
-        # return [x1[0], y1[0], x2[0], y2[0]]
-
-        # filtered_predictions = sorted_predictions[sorted_predictions[:, 4] > th]
-        # filtered_predictions = sorted_predictions[sorted_predictions[:, 4] > th]
-        filtered_predictions = sorted_predictions
-        # filtered_predictions = sorted_predictions
-        # filtered_predictions = sorted_predictions[:]
+        confidence = sorted_predictions[:, 4].cpu().numpy()
 
         best = self.previous_prediction
+
+        x1, y1, x2, y2 = xywh2xyxy(sorted_predictions[:, :4]).cpu().numpy().T
+
+        y_means = y1 + (y2 - y1) / 2
+
+        # return [x1[0], y1[0], x2[0], y2[0]]
+
         try:
-            if filtered_predictions.shape[0] > 0:
 
-                x1, y1, x2, y2 = xywh2xyxy(filtered_predictions[:, :4]).cpu().numpy().T
+            in_first_system = (y_means >= systems[0][0]) & (y_means <= systems[0][1])
+            start_in_front = (x1 < SCORE_WIDTH*0.3)
 
-                y_means = y1 + (y2 - y1) / 2
-                in_first_system = (y_means >= systems[0][0]) & (y_means <= systems[0][1])
-                start_in_front = (x1 < SCORE_WIDTH*0.3)
-                # if self.previous_prediction is not None:
-                if not start_from_top and self.previous_prediction is not None:
-                    previous_y_mean = self.previous_prediction[1] \
-                                      + (self.previous_prediction[3] - self.previous_prediction[1])/2
+            if start_from_top:
+                indices = in_first_system & start_in_front & start_from_top
 
-                    curr_system_idx = np.argwhere((systems[:, 0] <= previous_y_mean) & (systems[:, 1] >= previous_y_mean)).item()
-                    curr_system = systems[curr_system_idx]
+                if any(indices):
+                    x1 = x1[indices]
+                    x2 = x2[indices]
+                    y1 = y1[indices]
+                    y2 = y2[indices]
+                    best = [x1[0], y1[0], x2[0], y2[0]]
+            else:
 
-                    next_system = systems[min(curr_system_idx + 1, len(systems) - 1)]
-                    # only move to the right
-                    # move_right = (x1 >= self.previous_prediction[0] - 20)
-                    move_right = True #(x1 >= self.previous_prediction[0] - 100) #& (x1 <= self.previous_prediction[0] + 100)
-                    # stay_within_system = (self.previous_prediction[1] - 20 <= y1) & (self.previous_prediction[1] + 20 >= y1)
-                    stay_within_system = (y_means >= curr_system[0]) & (y_means <= curr_system[1])
-                    # move_to_next_system = (self.previous_prediction[1] + 20 <= y1)
+                previous_y_mean = self.previous_prediction[1] \
+                                  + (self.previous_prediction[3] - self.previous_prediction[1])/2
 
-                    # only allow jump if prediction is past certain x-location
-                    allow_move_to_next = SCORE_WIDTH*0.7 < self.previous_prediction[0] and (next_system != curr_system_idx).all()
-                    move_to_next_system = allow_move_to_next & (y_means >= next_system[0]) & (y_means <= next_system[1])
+                curr_system_idx = np.argwhere((systems[:, 0] <= previous_y_mean) & (systems[:, 1] >= previous_y_mean)).item()
 
-                    indices = (move_right & stay_within_system) | (move_to_next_system & start_in_front)
+                prev_system_idx = max(0, curr_system_idx - 1)
+                next_system_idx = min(curr_system_idx + 1, len(systems) - 1)
 
-                    if any(indices):
-                        x1 = x1[indices]
-                        x2 = x2[indices]
-                        y1 = y1[indices]
-                        y2 = y2[indices]
-                        best = [x1[0], y1[0], x2[0], y2[0]]
+                curr_system = systems[curr_system_idx]
+                prev_system = systems[prev_system_idx]
+                next_system = systems[next_system_idx]
 
-                else:
+                stay_within_system = (y_means >= curr_system[0]) & (y_means <= curr_system[1])
+                move_to_prev_system = (y_means >= prev_system[0]) & (y_means <= prev_system[1]) & (confidence > 0.5)
+                move_to_next_system = (y_means >= next_system[0]) & (y_means <= next_system[1]) #& (confidence > 0.5)
 
-                    indices = (in_first_system & start_in_front) & start_from_top
-                    if any(indices):
-                        x1 = x1[indices]
-                        x2 = x2[indices]
-                        y1 = y1[indices]
-                        y2 = y2[indices]
-                        # best = [x1[0], y1[0], x2[0], y2[0]]
+                indices = stay_within_system | move_to_next_system | move_to_prev_system
 
-                        best = [x1[0], y1[0], x2[0], y2[0]]
+                if any(indices):
+                    x1 = x1[indices]
+                    x2 = x2[indices]
+                    y1 = y1[indices]
+                    y2 = y2[indices]
+                    best = [x1[0], y1[0], x2[0], y2[0]]
 
-        except:
-            x1, y1, x2, y2 = xywh2xyxy(sorted_predictions[:, :4]).cpu().numpy().T
+        except ValueError:
+            # Fall back solution in case of an error (e.g. significant change in the detected systems)
             best = [x1[0], y1[0], x2[0], y2[0]]
-
-
-        # if filtered_predictions.shape[0] == 0 or best is None:
-        #     # else:
-        #
-        #     th -= 0.1
-        #
-        #     if th <= 0:
-        #         self.previous_prediction = None
-        #     # if self.previous_prediction is None:
-        #     #     th -= 0.1
-        #     # self.previous_prediction = None
-        #
-        #     best = self.get_best_prediction(predictions, systems, th, start_from_top=start_from_top)
-
-        # else:
-        #     self.cooldown += 1
-        #
-        #     if self.cooldown > 20:
-        #         x1, y1, x2, y2 = xywh2xyxy(sorted_predictions[:, :4]).cpu().numpy().T
-        #         best = [x1[0], y1[0], x2[0], y2[0]]
-        #         self.cooldown = 0
 
         return best
 
@@ -161,12 +132,13 @@ class ScoreAudioPrediction(threading.Thread):
         hidden = None
         frame_idx = 0
 
-        curr_y = 0
-        curr_x = 0
+        th_len = 5
+
+        curr_y = deque(np.zeros(th_len), maxlen=th_len)
+        curr_x = deque(np.zeros(th_len), maxlen=th_len)
         observations = []
 
         self.previous_prediction = None
-        self.cooldown = 0
         page_turner_cooldown = 0
         start_from_top = True
         while not self.is_piece_end:
@@ -181,14 +153,20 @@ class ScoreAudioPrediction(threading.Thread):
             if len(signal[from_:to_]) != FRAME_SIZE:
                 continue
 
-            if len(system_ys) > 0 and system_ys[-1][0] <= curr_y <= system_ys[-1][1] and curr_x > SCORE_WIDTH / 2:
+            in_last_system = len(system_ys) > 0 and system_ys[-1][0] <= np.mean(curr_y) <= system_ys[-1][1]
+
+            # if halfway into the last system on a page
+            if in_last_system and np.mean(curr_x) > SCORE_WIDTH / 2:
 
                 if self.image_stream.more_pages(self.actual_page) and page_turner_cooldown <= 0:
                     print('Turn page')
                     hidden = None
                     self.actual_page += 1
                     self.previous_prediction = None
-                    page_turner_cooldown = 10
+
+                    curr_y = deque(np.zeros(th_len), maxlen=th_len)
+                    curr_x = deque(np.zeros(th_len), maxlen=th_len)
+                    page_turner_cooldown = 40
                     start_from_top = True
 
                     if self.image_stream.camera_input:
@@ -201,17 +179,16 @@ class ScoreAudioPrediction(threading.Thread):
 
             org_score, score, system_ys = self.image_stream.get(self.actual_page)
 
-            # add channel and batch dimension
-            score_tensor = torch.from_numpy(score).unsqueeze(0).unsqueeze(0).to(self.device)
-
             if page_turner_cooldown > 0:
                 page_turner_cooldown -= 1
-                print('cool down')
                 hidden = None
                 self.previous_prediction = None
                 start_from_top = True
 
             with torch.no_grad():
+                # add channel and batch dimension
+                score_tensor = torch.from_numpy(score).unsqueeze(0).unsqueeze(0).to(self.device)
+
                 sig_excerpt = torch.from_numpy(signal[from_:to_]).float().to(self.device)
                 spec_frame = self.network.compute_spec([sig_excerpt], tempo_aug=False)[0]
 
@@ -224,8 +201,9 @@ class ScoreAudioPrediction(threading.Thread):
 
             if best_prediction is not None:
                 x1, y1, x2, y2 = best_prediction
-                curr_y = y1 + (y2 - y1) / 2
-                curr_x = x1 + (x2 - x1) / 2
+
+                curr_y.append(y1 + (y2 - y1) / 2)
+                curr_x.append(x1 + (x2 - x1) / 2)
 
             start_from_top = False
 

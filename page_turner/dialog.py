@@ -2,7 +2,7 @@ import os
 
 from PyQt5 import QtGui, QtWidgets
 from PyQt5.QtWidgets import QDialog, QFileDialog
-from page_turner.config import DEFAULT_MODEL
+from page_turner.config import DEFAULT_MODEL, DEFAULT_DIR
 
 
 class DialogWindow(QDialog):
@@ -143,8 +143,7 @@ class DialogWindow(QDialog):
         if path is not None:
             search_path = path
         else:
-            # search_path = os.path.join('..', 'demo_piece')
-            search_path = "/home/florian/mounts/rk7/home/florianh/frontiers_data/msmd_22050/msmd_test"
+            search_path = DEFAULT_DIR
         curr_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, 'Select one piece', search_path,
                                                              f"(*.{extension})",
                                                              options=QFileDialog.DontUseNativeDialog)
