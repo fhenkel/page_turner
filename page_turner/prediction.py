@@ -195,9 +195,9 @@ class ScoreAudioPrediction(threading.Thread):
                 z, hidden = self.network.conditioning_network.get_conditioning(spec_frame, hidden=hidden)
                 inference_out, pred = self.network.predict(score_tensor, z)
 
-            filtered_inference_out = inference_out[0, inference_out[0, :, -1] == 0].unsqueeze(0)
+            filtered_inference_out = inference_out[0, inference_out[0, :, -1] == 0]
 
-            best_prediction = self.get_best_prediction(filtered_inference_out[0], system_ys, start_from_top=start_from_top)
+            best_prediction = self.get_best_prediction(filtered_inference_out, system_ys, start_from_top=start_from_top)
 
             if best_prediction is not None:
                 x1, y1, x2, y2 = best_prediction
