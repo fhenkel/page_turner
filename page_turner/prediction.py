@@ -67,16 +67,17 @@ class ScoreAudioPrediction(threading.Thread):
 
         best = self.previous_prediction
 
+        x, y = sorted_predictions[:, :2].cpu().numpy().T
         x1, y1, x2, y2 = xywh2xyxy(sorted_predictions[:, :4]).cpu().numpy().T
 
-        y_means = y1 + (y2 - y1) / 2
+        # y_means = y1 + (y2 - y1) / 2
 
         # return [x1[0], y1[0], x2[0], y2[0]]
 
         try:
 
-            in_first_system = (y_means >= systems[0][0]) & (y_means <= systems[0][1])
-            start_in_front = (x1 < SCORE_WIDTH*0.3)
+            in_first_system = (y >= systems[0][0]) & (y <= systems[0][1])
+            start_in_front = (x < SCORE_WIDTH*0.3)
 
             if start_from_top:
                 indices = in_first_system & start_in_front & start_from_top
@@ -89,10 +90,10 @@ class ScoreAudioPrediction(threading.Thread):
                     best = [x1[0], y1[0], x2[0], y2[0]]
             else:
 
-                previous_y_mean = self.previous_prediction[1] \
+                previous_y = self.previous_prediction[1] \
                                   + (self.previous_prediction[3] - self.previous_prediction[1])/2
 
-                curr_system_idx = np.argwhere((systems[:, 0] <= previous_y_mean) & (systems[:, 1] >= previous_y_mean)).item()
+                curr_system_idx = np.argwhere((systems[:, 0] <= previous_y) & (systems[:, 1] >= previous_y)).item()
 
                 prev_system_idx = max(0, curr_system_idx - 1)
                 next_system_idx = min(curr_system_idx + 1, len(systems) - 1)
@@ -101,13 +102,13 @@ class ScoreAudioPrediction(threading.Thread):
                 prev_system = systems[prev_system_idx]
                 next_system = systems[next_system_idx]
 
-                stay_within_system = (y_means >= curr_system[0]) & (y_means <= curr_system[1])
-                move_to_prev_system = (y_means >= prev_system[0]) & (y_means <= prev_system[1]) & (confidence > 0.5)
-                move_to_next_system = (y_means >= next_system[0]) & (y_means <= next_system[1]) #& (confidence > 0.5)
+                stay_within_system = (y >= curr_system[0]) & (y <= curr_system[1])
+                move_to_prev_system = (y >= prev_system[0]) & (y <= prev_system[1]) & (confidence > 0.5)
+                move_to_next_system = (y >= next_system[0]) & (y <= next_system[1])
 
                 indices = stay_within_system | move_to_next_system | move_to_prev_system
 
-                if any(indices):
+                if any(indices ):
                     x1 = x1[indices]
                     x2 = x2[indices]
                     y1 = y1[indices]
