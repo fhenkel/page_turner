@@ -1,5 +1,3 @@
-
-
 import setuptools
 from setuptools import setup
 
@@ -7,7 +5,7 @@ from setuptools import setup
 setup(
     name='page_turner',
     version='0.1dev',
-    description='Automatic Page Turing with Sheet Music Images',
+    description='Fully Automatic Page Turning on Real Scores',
     packages=setuptools.find_packages(),
     classifiers=[
         "Development Status :: 3 - Alpha",
