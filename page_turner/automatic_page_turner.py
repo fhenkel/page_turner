@@ -105,14 +105,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.timer.start()
 
     def update_visualization(self):
-        """
-        This function updates the visualization of the audio and of the prediction in the score:
-        It increases the size of the currently tracked page and adds a red frame.
-        If another page is chosen to be shown in big due to an click event, then it
-        will not change the big image to the current tracked page.
-        :return:
-        """
-
         self.score_image, audio_image = self.image_predictor.get_next_images()
 
         self.score_img.setImage(self.score_image)

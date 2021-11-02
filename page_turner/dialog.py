@@ -89,8 +89,8 @@ class DialogWindow(QDialog):
         a wav file for the audio, when "choose from library" is clicked
         in the dropdown
         :param text: "live" or "choose from library"
-        :return:
         """
+
         if text == "choose from library":
             self.choose_piece_dir("wav")
         elif text == "live":
@@ -101,11 +101,10 @@ class DialogWindow(QDialog):
 
     def react_to_score_dropdown(self, text):
         """
-            This function opens a dialog window to choose
-            a npz file for the score, when "choose from library" is clicked
-            in the dropdown
-            :param text: "live" or "choose from library"
-            :return:
+        This function opens a dialog window to choose
+        a npz file for the score, when "choose from library" is clicked
+        in the dropdown
+        :param text: "live" or "choose from library"
         """
 
         if text == "choose from library":
@@ -118,12 +117,12 @@ class DialogWindow(QDialog):
 
     def react_to_model_dropdown(self, text):
         """
-            This function opens a dialog window to choose
-            a .pt file for the model, when "choose local" is clicked
-            in the dropdown
-            :param text: "default" or "choose local"
-            :return: 
+        This function opens a dialog window to choose
+        a .pt file for the model, when "choose local" is clicked
+        in the dropdown
+        :param text: "default" or "choose local"
         """
+
         if text == "choose local":
             self.choose_piece_dir("pt", os.path.join('..', 'models'))
         elif text == "default":
@@ -131,15 +130,15 @@ class DialogWindow(QDialog):
         else:
             raise NotImplementedError
 
-    def choose_piece_dir(self, extension, path=None, ):
+    def choose_piece_dir(self, extension, path=None):
         """
         This function opens a dialog window to choose a file
         with a specific extension in the default path or in another chosen path.
         The full path of the chosen file is saved to the respective variable.
         :param extension: str of the extension the file must have options: ["wav", "npz", "pt"]
         :param path: path to open first in the dialog
-        :return:
         """
+
         if path is not None:
             search_path = path
         else:

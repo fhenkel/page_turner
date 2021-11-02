@@ -70,10 +70,6 @@ class ScoreAudioPrediction(threading.Thread):
         x, y = sorted_predictions[:, :2].cpu().numpy().T
         x1, y1, x2, y2 = xywh2xyxy(sorted_predictions[:, :4]).cpu().numpy().T
 
-        # y_means = y1 + (y2 - y1) / 2
-
-        # return [x1[0], y1[0], x2[0], y2[0]]
-
         try:
 
             in_first_system = (y >= systems[0][0]) & (y <= systems[0][1])
@@ -108,7 +104,7 @@ class ScoreAudioPrediction(threading.Thread):
 
                 indices = stay_within_system | move_to_next_system | move_to_prev_system
 
-                if any(indices ):
+                if any(indices):
                     x1 = x1[indices]
                     x2 = x2[indices]
                     y1 = y1[indices]
@@ -230,7 +226,7 @@ class ScoreAudioPrediction(threading.Thread):
         if self.vis_spec is not None:
             self.vis_spec = np.roll(self.vis_spec, -1, axis=1)
         else:
-            self.vis_spec = np.zeros((spec_frame.shape[-1], 400))
+            self.vis_spec = np.zeros((spec_frame.shape[-1], SPEC_VIS_WINDOW))
 
         self.vis_spec[:, -1] = spec_frame[0].cpu().numpy()
 

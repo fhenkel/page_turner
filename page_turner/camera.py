@@ -50,7 +50,6 @@ class Camera(multiprocessing.Process):
 
         scaled_score = cv2.resize(score, (SCALE_WIDTH, SCALE_WIDTH), interpolation=cv2.INTER_AREA)
 
-        # self.org_score = cv2.cvtColor(np.array(org_frame, dtype=np.float32) / 255., cv2.COLOR_GRAY2BGR)
         org_score = np.array(org_frame, dtype=np.float32) / 255.
 
         system_ys = find_system_ys(org_score, thicken_lines=True)
