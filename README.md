@@ -1,4 +1,4 @@
-## Automatic Page Turing with Sheet Music Images
+## Fully Automatic Page Turning on Real Scores
 
 This repository contains the corresponding code for our extended abstract
 
