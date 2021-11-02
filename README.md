@@ -10,7 +10,8 @@ This repository contains the corresponding code for our extended abstract
 
 ### Videos
 In the folder [`videos`](https://github.com/fhenkel/page_turner/tree/master/videos) 
-you will find two pieces from the test set, where our best performing model follows an incoming musical performance.
+you will find a piece from the test set, where our system follows the incoming musical performance
+(once a synthetic audio and once a recording) and turns pages accordingly.
 
 ## Getting Started
 If you want to try our code, please follow the instructions below.
