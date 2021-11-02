@@ -40,6 +40,21 @@ Finally, install the project in the activated environment:
 
 `python setup.py develop --user`
 
+### Check if everything works
+
+To verify that everything is correctly set up, move to the `page_turner` directory and run the following command:
+
+ ```python automatic_page_turner.py```
+ 
+This opens a window with two buttons on the bottom. 
+Clicking on `Start tracking...` will then open a dialog window that allows 
+you to select different performances, scores and models. 
+(The `#Pages` is intended for the live mode of the score to indicate 
+how often a page should be turned by a physical page turner. 
+Just keep it to 0 if you load the score from the disk.) 
+Once everything is set, press the `ok` button to start tracking.
+
+
  ## Acknowledgements
 
 We would like to thank Jan Hajič Jr. and 
