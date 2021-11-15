@@ -5,7 +5,7 @@ This repository contains the corresponding code for our extended abstract
 >[Henkel F.](https://www.jku.at/en/institute-of-computational-perception/about-us/people/florian-henkel/),
 >[Schwaiger S.](https://github.com/SchwaigerStephanie)  and 
 >[Widmer G.](https://www.jku.at/en/institute-of-computational-perception/about-us/people/gerhard-widmer/) <br>
-"[Fully Automatic Page Turning on Real Scores]()".<br>
+"[Fully Automatic Page Turning on Real Scores](https://arxiv.org/pdf/2111.06643.pdf)".<br>
 *In Extended Abstracts for the Late-Breaking Demo Session of the 22nd International Society for Music Information Retrieval Conference*, 2021
 
 ### Videos
