@@ -20,7 +20,7 @@ from page_turner.image_stream import ImageStream
 
 class ScoreAudioPrediction(threading.Thread):
 
-    def __init__(self, param_path,  audio_path=None, score_path=None, n_pages=None):
+    def __init__(self, param_path,  audio_path=None, score_path=None, n_pages=None, score_fraction=0.5):
         """
         This function initializes an instance of the class.
         :param param_path: full path to the model loaded
@@ -51,6 +51,7 @@ class ScoreAudioPrediction(threading.Thread):
         self.start_ = None
         self.vis_spec = None
         self.is_piece_end = False
+        self.score_fraction = score_fraction
 
     def get_next_images(self):
         return self.score_img, self.spec_img
@@ -152,8 +153,8 @@ class ScoreAudioPrediction(threading.Thread):
 
             in_last_system = len(system_ys) > 0 and system_ys[-1][0] <= np.mean(curr_y) <= system_ys[-1][1]
 
-            # if halfway into the last system on a page
-            if in_last_system and np.mean(curr_x) > SCORE_WIDTH / 2:
+            # if the current position in the last system reaches a certain threshold
+            if in_last_system and np.mean(curr_x) > self.score_fraction * SCORE_WIDTH:
 
                 if self.image_stream.more_pages(self.actual_page) and page_turner_cooldown <= 0:
                     print('Turn page')

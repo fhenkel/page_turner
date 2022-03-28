@@ -17,6 +17,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.resize(self.screen().size().width(), height)
 
         self.param_path, self.audio_path, self.score_path, self.n_pages = None, None, None, None
+        self.score_fraction = 0.5
 
         vert_layout = QtWidgets.QVBoxLayout()
 
@@ -92,9 +93,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.audio_path = self.dialog.audio_path  # None (if live) or the path to the .wav file of the audio
         self.score_path = self.dialog.score_path  # None (if live) or the path to the .npz file of the score
         self.n_pages = self.dialog.n_pages
+        self.score_fraction = self.dialog.score_fraction
 
         self.image_predictor = ScoreAudioPrediction(self.param_path, audio_path=self.audio_path,
-                                                    score_path=self.score_path, n_pages=self.n_pages)
+                                                    score_path=self.score_path, n_pages=self.n_pages, score_fraction=self.score_fraction)
 
         self.image_predictor.start()
 

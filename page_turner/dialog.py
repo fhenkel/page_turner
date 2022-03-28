@@ -18,6 +18,7 @@ class DialogWindow(QDialog):
         self.score_path = None
         self.n_pages = 0
         self.model_path = DEFAULT_MODEL
+        self.score_fraction = 0.8
 
         font = QtGui.QFont()
         font.setBold(True)
@@ -53,6 +54,15 @@ class DialogWindow(QDialog):
         self.n_pages_spinbox.setMinimum(0)
         self.n_pages_spinbox.valueChanged.connect(self.react_to_n_pages_change)
 
+        fraction_label = QtWidgets.QLabel("W-Frac", self)
+        fraction_label.setFont(font)
+        self.fraction_spinbox = QtWidgets.QDoubleSpinBox()
+        self.fraction_spinbox.setMinimum(0)
+        self.fraction_spinbox.setMaximum(1)
+        self.fraction_spinbox.setValue(self.score_fraction)
+        self.fraction_spinbox.setSingleStep(0.01)
+        self.fraction_spinbox.valueChanged.connect(self.react_to_fraction_change)
+
         # setup ok button
         ok_button = QtWidgets.QPushButton("ok")
         ok_button.clicked.connect(self.close)
@@ -77,11 +87,18 @@ class DialogWindow(QDialog):
         grid_layout.addWidget(model_dropdown, i, 1)
         i += 1
 
+        grid_layout.addWidget(fraction_label, i, 0)
+        grid_layout.addWidget(self.fraction_spinbox, i, 1)
+        i += 1
+
         grid_layout.addWidget(ok_button, i, 1)
         self.setLayout(grid_layout)
 
     def react_to_n_pages_change(self):
         self.n_pages = self.n_pages_spinbox.value()
+
+    def react_to_fraction_change(self):
+        self.score_fraction = self.fraction_spinbox.value()
 
     def react_to_audio_dropdown(self, text):
         """
